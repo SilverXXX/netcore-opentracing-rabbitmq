@@ -43,9 +43,8 @@ namespace NetCore.OpenTracing.RabbitMQ
             {
                 var spanBuilder = tracer.BuildSpan("receive")
                     .IgnoreActiveSpan()
+                    .AddReference(References.FollowsFrom, context)
                     .WithTag(Tags.SpanKind.Key, Tags.SpanKindConsumer);
-
-                spanBuilder.AddReference(References.FollowsFrom, context);
 
                 var scope = spanBuilder.StartActive(true);
                 SpanDecorator.OnResponse(scope.Span);

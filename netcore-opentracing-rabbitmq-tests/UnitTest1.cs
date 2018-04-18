@@ -1,8 +1,3 @@
-using LetsTrace;
-using LetsTrace.Reporters;
-using LetsTrace.Jaeger.Transport;
-using LetsTrace.Zipkin.Transport.ZipkinJSON;
-using LetsTrace.Samplers;
 using RabbitMQ.Client;
 using System;
 using Xunit;
@@ -13,6 +8,10 @@ using RabbitMQ.Client.Events;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit.Abstractions;
+using Jaeger.Transport.Thrift.Transport;
+using Jaeger.Core.Reporters;
+using Jaeger.Core.Samplers;
+using Jaeger.Core;
 
 namespace netcore_opentracing_rabbitmq_tests
 {
@@ -24,7 +23,8 @@ namespace netcore_opentracing_rabbitmq_tests
             var cf = new ConnectionFactory() { Uri = new Uri("amqp://guest:guest@localhost:5672") };
 
             var serviceName = "initExampleService";
-            var transport = new JaegerHttpTransport("192.168.99.100");
+            //var transport = new JaegerHttpTransport("192.168.99.100");
+            var transport = new JaegerUdpTransport("10.150.28.30", 6831);
             //var zt = new ZipkinJSONTransport(new Uri("http://192.168.99.100:9411"), 2);
 
             var reporter = new RemoteReporter.Builder(transport).Build();
@@ -48,28 +48,36 @@ namespace netcore_opentracing_rabbitmq_tests
             var tracer = new Tracer.Builder(serviceName)
                 .WithLoggerFactory(loggerFactory)
                 //.WithTransport(transport)
-                .WithReporter(logReporter)
+                //.WithReporter(logReporter)
+                .WithReporter(reporter)
                 .WithSampler(sampler)
                 .Build();
-
-            var conn = cf.CreateConnection("testtracing");
-            var model = new TracingModel(conn.CreateModel(), tracer);
-            // TODO: Add your test code here
-
-            model.BasicPublish("testexchange", "", false, null, Encoding.UTF8.GetBytes("testmessage"));
-            /*var consumer = new EventingBasicConsumer(model);
-            consumer.Received += (ch, ea) =>
+            using (var span = tracer.BuildSpan("fakeget").StartActive(true))
             {
-                var body = ea.Body;
-                // ... process the message
-                model.BasicAck(ea.DeliveryTag, false);
-            };
 
-            Task.Delay(200).Wait();
+                var conn = cf.CreateConnection("testtracing");
+                var model = new TracingModel(conn.CreateModel(), tracer);
+                // TODO: Add your test code here
 
-            var res = model.BasicConsume("testqueueu", false, consumer);*/
-            Task.Delay(200).Wait();
-            var res = model.BasicGet("testqueueu", true);
+                for (int i = 0; i < 25; i++)
+                {
+                    model.BasicPublish("testexchange", "", false, null, Encoding.UTF8.GetBytes("testmessage"));
+                    /*var consumer = new EventingBasicConsumer(model);
+                    consumer.Received += (ch, ea) =>
+                    {
+                        var body = ea.Body;
+                        // ... process the message
+                        model.BasicAck(ea.DeliveryTag, false);
+                    };
+
+                    Task.Delay(200).Wait();
+
+                    var res = model.BasicConsume("testqueueu", false, consumer);*/
+                    Task.Delay(2500).Wait();
+                    var res = model.BasicGet("testqueueu", true);
+                }
+            }
+            tracer.Dispose();
             Assert.True(true, "Your first passing test");
         }
 
